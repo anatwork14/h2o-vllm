@@ -13,5 +13,5 @@ def test_plugin_blocks_fake_h2o(monkeypatch):
     with patch("h2o_vllm.vllm_plugin.assert_engine_version", return_value="0.29.0"):
         monkeypatch.setenv("H2O_VLLM_MODE", "h2o")
         from h2o_vllm.vllm_plugin import register
-        with pytest.raises(RuntimeError, match="not integrated"):
+        with pytest.raises(RuntimeError, match="not implemented"):
             register()
