@@ -1,0 +1,3 @@
+[submodule "upstream/H2O"]
+	path = upstream/H2O
+	url = https://github.com/FMInference/H2O.git
