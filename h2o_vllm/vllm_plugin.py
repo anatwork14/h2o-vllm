@@ -1,21 +1,30 @@
-"""vLLM 0.29.0 entry point: explicitly labeled FlashAttention pass-through.
+"""vLLM 0.29.0 plugin: explicitly NOT a running H2O eviction backend.
 
-Only a registration/wiring canary. Real H2O scoring and physical KV eviction
-are not integrated. Deliberately fail closed rather than spoof H2O results.
+Disabled by default and inert when vLLM runs for unrelated workloads. An
+enabled canary validates the exact target engine before registering a custom
+FlashAttention *passthrough* backend. There is no H2O runtime arm yet.
 """
 import os
 from .compat import assert_engine_version
 
 def register() -> None:
-    assert_engine_version()
-    mode = os.getenv("H2O_VLLM_MODE", "disabled").lower()
+    mode = os.getenv("H2O_VLLM_MODE", "disabled").strip().lower()
+    # General plugins load in every engine/worker process. Do not globally
+    # break unrelated vLLM workloads when this package happens to be installed.
     if mode == "disabled":
         return
-    if mode != "passthrough":
+    if mode not in ("passthrough",):
         raise RuntimeError(
-            "H2O vLLM real KV eviction is not integrated or GPU-qualified. "
-            "Only H2O_VLLM_MODE=passthrough is available as a wiring canary; "
-            "never label it an H2O experiment."
+            f"Unsupported H2O_VLLM_MODE={mode!r}. Real H2O GPU eviction is "
+            "not implemented. Allowed values: disabled, passthrough. "
+            "Passthrough must NEVER be reported as H2O."
         )
-    from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
-    register_backend(AttentionBackendEnum.CUSTOM, "h2o_vllm.vllm_backend.H2OPassthroughBackend")
+    assert_engine_version()
+    from vllm.v1.attention.backends.registry import (
+        AttentionBackendEnum,
+        register_backend,
+    )
+    register_backend(
+        AttentionBackendEnum.CUSTOM,
+        "h2o_vllm.vllm_backend.H2OPassthroughBackend",
+    )
