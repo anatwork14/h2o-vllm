@@ -20,7 +20,7 @@ def test_disabled_plugin_does_not_break_unrelated_engines(monkeypatch):
 def test_passthrough_plugin_registers_exact_backend(monkeypatch):
     monkeypatch.setenv("H2O_VLLM_MODE", "passthrough")
     registry = types.ModuleType("vllm.v1.attention.backends.registry")
-    registry.AttentionBackendEnum = types.SimpleNamespace(CUSTOM=object())
+    registry.AttentionBackendEnum = types.SimpleNamespace(CUSTOM=types.SimpleNamespace(is_overridden=lambda: False))
     called = []
     registry.register_backend = lambda enum, path: called.append((enum, path))
     # Stub the exact imported module without installing the 1+GB GPU engine.
@@ -80,3 +80,43 @@ def test_manifest_makes_runtime_false_explicit():
     assert m["runtime_verified"] is False
     assert m["physical_kv_eviction"] is False
     assert m["attention_probabilities_collected"] is False
+
+
+def test_passthrough_rejects_pre_registered_custom_backend(monkeypatch):
+    """Regression: CUSTOM can only belong to one vLLM attention plugin."""
+    monkeypatch.setenv("H2O_VLLM_MODE", "passthrough")
+    monkeypatch.delenv("DATTN_MODEL", raising=False)
+    monkeypatch.delenv("DATTN_BASE_BACKEND", raising=False)
+    registry = types.ModuleType("vllm.v1.attention.backends.registry")
+    registry.AttentionBackendEnum = types.SimpleNamespace(
+        CUSTOM=types.SimpleNamespace(is_overridden=lambda: True))
+    registry.register_backend = lambda *a, **k: pytest.fail("overwrote DA backend")
+    with patch("h2o_vllm.vllm_plugin.assert_engine_version", return_value="0.29.0"), patch.dict(
+        sys.modules, {
+            "vllm": types.ModuleType("vllm"),
+            "vllm.v1": types.ModuleType("vllm.v1"),
+            "vllm.v1.attention": types.ModuleType("vllm.v1.attention"),
+            "vllm.v1.attention.backends": types.ModuleType("vllm.v1.attention.backends"),
+            "vllm.v1.attention.backends.registry": registry,
+        }
+    ):
+        with pytest.raises(RuntimeError, match="already registered"):
+            register()
+
+
+def test_passthrough_rejects_da_env_even_before_slot_registration(monkeypatch):
+    """DA can load after H2O; the early environment check prevents this."""
+    monkeypatch.setenv("H2O_VLLM_MODE", "passthrough")
+    monkeypatch.setenv("DATTN_MODEL", "Qwen/Qwen3.5-4B")
+    with patch("h2o_vllm.vllm_plugin.assert_engine_version",
+               side_effect=AssertionError("should not import vLLM yet")):
+        with pytest.raises(RuntimeError, match="cannot share"):
+            register()
+
+
+def test_disabled_h2o_plugin_remains_inert_when_da_env_is_present(monkeypatch):
+    monkeypatch.delenv("H2O_VLLM_MODE", raising=False)
+    monkeypatch.setenv("DATTN_MODEL", "Qwen/Qwen3.5-4B")
+    with patch("h2o_vllm.vllm_plugin.assert_engine_version",
+               side_effect=AssertionError("disabled plugin touched engine")):
+        register()

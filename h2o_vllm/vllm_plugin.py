@@ -19,12 +19,26 @@ def register() -> None:
             "not implemented. Allowed values: disabled, passthrough. "
             "Passthrough must NEVER be reported as H2O."
         )
+    # The authors' Declarative Attention plugin also owns the single CUSTOM
+    # backend slot. Reject a combined process even if H2O's plugin happens to
+    # load first; load order must never silently select a different kernel.
+    if any(os.getenv(name) for name in ("DATTN_MODEL", "DATTN_BASE_BACKEND")):
+        raise RuntimeError(
+            "H2O pass-through and Declarative Attention cannot share the "
+            "vLLM CUSTOM backend slot. Run them in isolated engine processes."
+        )
     assert_engine_version()
     from vllm.v1.attention.backends.registry import (
         AttentionBackendEnum,
         register_backend,
     )
+    custom = AttentionBackendEnum.CUSTOM
+    if custom.is_overridden():
+        raise RuntimeError(
+            "CUSTOM vLLM attention backend is already registered. "
+            "Refusing to overwrite another plugin (possibly Declarative Attention)."
+        )
     register_backend(
-        AttentionBackendEnum.CUSTOM,
+        custom,
         "h2o_vllm.vllm_backend.H2OPassthroughBackend",
     )
