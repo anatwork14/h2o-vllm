@@ -1,0 +1,21 @@
+name: H2O CPU policy tests
+on:
+  push:
+  pull_request:
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: python -m pip install -e '.[test]'
+      - name: Test
+        run: python -m pytest -q
+      - name: Inspect benchmark contract
+        run: python -m h2o_vllm --heavy-hitter-tokens 128 --recent-tokens 128

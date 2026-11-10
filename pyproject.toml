@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "h2o-vllm"
+version = "0.1.0"
+description = "H2O heavy-hitter policy research adapter for pinned vLLM 0.29.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+vllm = ["vllm==0.29.0"]
+
+[project.entry-points."vllm.general_plugins"]
+h2o_vllm = "h2o_vllm.vllm_plugin:register"
+
+[tool.setuptools.packages.find]
+include = ["h2o_vllm*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
