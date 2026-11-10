@@ -12,7 +12,40 @@
 
 `H2O_VLLM_MODE=passthrough` is only for packaging/registration smoke tests, labeled `flash-attn-passthrough`, never a H2O benchmark.
 
-The target `anatwork14/vllm-benchmark` currently contains only a README and LICENSE. No changes are required there until an actual runtime-qualified H2O backend is ready. Keep the method packaged here instead of copying experimental vLLM internals into the benchmark repo.
+The `anatwork14/vllm-benchmark` feature branches now contain a real
+research_bench benchmark harness and vLLM 0.29.0 source snapshot. This document
+must not claim it is a README-only repository. The current H2O library is still
+policy-only, so there is NO qualified H2O runtime to connect into either
+`vllm-benchmark` or `anatwork14/colab-cli-server`.
+
+The standalone `colab-cli-server` research branch contains
+`research_ops/vllm_engine/h2o_bridge.py`, a **no-GPU, no-eviction**
+candidate/protection policy seam. It validates this package's signed-by-source
+manifest contract, including `real_h2o_eviction=false`. It is not a loadable
+combined attention backend and cannot report VRAM savings.
+
+## Conflict with Declarative Attention
+
+Both this H2O canary and the author-original
+`itsnamgyu/declarative-attention` plugin register into vLLM 0.29.0's
+**single CUSTOM backend slot**. Attempting to enable both packages in one
+vLLM process is unsafe. H2O `vllm_plugin.register()` now rejects
+`DATTN_MODEL`/`DATTN_BASE_BACKEND` environments and existing CUSTOM
+registrations before mutating the registry. For real experiments, isolate
+DA-only and H2O-only engines in separate processes until a **single**
+composable backend owns the metadata builder and scheduler policy.
+
+**Fundamental semantic conflict:** DA can return to GLOBAL (dense history)
+after a FOCUS/LOCAL phase. Physically evicting a block simply because it
+was not selected by a previous DA step can make that GLOBAL transition
+incorrect. Before any DA × H2O physical eviction, prove either that future
+reaccess is impossible or that the exact original KV can be reconstructed
+with absolute positions intact. A CPU mask union is not sufficient.
+
+Do not interpret a candidate H2O block-drop plan as permission to free
+shared vLLM KV pages; cache manager refcounts, mixed hybrid attention,
+prefix cache, speculation and restart/cancellation require real GPU proof.
+
 
 ## Pending GPU acceptance tests
 
